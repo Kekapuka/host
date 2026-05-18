@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}FinTrack — Учёт личных финансов{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div class="hero-content">
+    <div class="hero-tag">✦ Личные финансы под контролем</div>
+    <h1>Знай, куда<br>уходят твои <em>деньги</em></h1>
+    <p>Простой трекер доходов и расходов с графиками и статистикой. Регистрация бесплатна.</p>
+    <div class="hero-actions">
+      <a href="{{ url_for('register') }}" class="btn btn-primary" style="font-size:15px;padding:13px 28px">Начать бесплатно →</a>
+      <a href="{{ url_for('login') }}" class="btn btn-ghost" style="font-size:15px;padding:13px 28px">Войти</a>
+    </div>
+    <div class="hero-features">
+      <div class="hero-feature">
+        <div class="hero-feature-icon">📊</div>
+        Графики и аналитика
+      </div>
+      <div class="hero-feature">
+        <div class="hero-feature-icon">🔒</div>
+        Безопасно и приватно
+      </div>
+      <div class="hero-feature">
+        <div class="hero-feature-icon">⚡</div>
+        Быстрый ввод данных
+      </div>
+      <div class="hero-feature">
+        <div class="hero-feature-icon">📱</div>
+        Работает везде
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

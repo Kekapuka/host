@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}История — FinTrack{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+    <div class="page-title">История операций</div>
+    <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">+ Добавить</a>
+  </div>
+  <div class="page-sub">Все ваши доходы и расходы</div>
+
+  <div class="table-wrap">
+
+    <!-- ФИЛЬТРЫ -->
+    <form class="table-filters" method="GET">
+      <select class="filter-select" name="type" onchange="this.form.submit()">
+        <option value="" {% if not ftype %}selected{% endif %}>Все типы</option>
+        <option value="income"  {% if ftype == 'income'  %}selected{% endif %}>↑ Доходы</option>
+        <option value="expense" {% if ftype == 'expense' %}selected{% endif %}>↓ Расходы</option>
+      </select>
+
+      <select class="filter-select" name="category" onchange="this.form.submit()">
+        <option value="" {% if not fcat %}selected{% endif %}>Все категории</option>
+        {% for cat in categories %}
+        <option value="{{ cat }}" {% if fcat == cat %}selected{% endif %}>{{ cat }}</option>
+        {% endfor %}
+      </select>
+
+      {% if ftype or fcat %}
+      <a href="{{ url_for('history') }}" class="btn btn-ghost btn-sm">✕ Сбросить</a>
+      {% endif %}
+
+      <span style="margin-left:auto;font-size:13px;color:var(--text3)">
+        {{ transactions|length }} операций
+      </span>
+    </form>
+
+    <!-- ТАБЛИЦА -->
+    {% if transactions %}
+    <table>
+      <thead>
+        <tr>
+          <th>Дата</th>
+          <th>Тип</th>
+          <th>Категория</th>
+          <th>Заметка</th>
+          <th style="text-align:right">Сумма</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tx in transactions %}
+        <tr>
+          <td style="color:var(--text3);font-size:13px;white-space:nowrap">
+            {{ tx.date.strftime('%d.%m.%Y') }}
+          </td>
+          <td>
+            <span class="badge {{ tx.type }}">
+              {{ '↑' if tx.type == 'income' else '↓' }} {{ tx.type_label }}
+            </span>
+          </td>
+          <td style="font-weight:500">{{ tx.category }}</td>
+          <td style="color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            {{ tx.note or '—' }}
+          </td>
+          <td style="text-align:right">
+            <span class="amount-cell {{ tx.type }}">
+              {{ '+' if tx.type == 'income' else '−' }} {{ '{:,.0f}'.format(tx.amount) }} ₽
+            </span>
+          </td>
+          <td style="text-align:right">
+            <form method="POST" action="{{ url_for('delete_transaction', tx_id=tx.id) }}"
+              onsubmit="return confirm('Удалить операцию?')">
+              <button type="submit" class="btn btn-danger">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- ИТОГО -->
+    {% set shown_income  = transactions | selectattr('type','eq','income')  | map(attribute='amount') | sum %}
+    {% set shown_expense = transactions | selectattr('type','eq','expense') | map(attribute='amount') | sum %}
+    <div style="padding:16px 20px;border-top:1px solid var(--border);display:flex;gap:24px;justify-content:flex-end">
+      {% if shown_income %}
+      <span style="font-size:13px;color:var(--text2)">
+        Доходы: <span style="color:var(--green);font-family:var(--mono)">+ {{ '{:,.0f}'.format(shown_income) }} ₽</span>
+      </span>
+      {% endif %}
+      {% if shown_expense %}
+      <span style="font-size:13px;color:var(--text2)">
+        Расходы: <span style="color:var(--red);font-family:var(--mono)">− {{ '{:,.0f}'.format(shown_expense) }} ₽</span>
+      </span>
+      {% endif %}
+    </div>
+
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">📋</div>
+      <p>Операций нет{% if ftype or fcat %} с такими фильтрами{% endif %}</p>
+      <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">Добавить операцию</a>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

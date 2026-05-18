@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Регистрация — FinTrack{% endblock %}
+
+{% block content %}
+<div class="container-sm">
+  <a href="{{ url_for('index') }}" class="navbar-logo" style="display:inline-flex;margin-top:20px">◈ Fin<span>Track</span></a>
+  <div class="auth-card">
+    <div class="auth-title">Создать аккаунт</div>
+    <div class="auth-sub">Бесплатно и без лишних вопросов</div>
+
+    <form class="auth-form" method="POST">
+      <div class="field">
+        <label class="field-label">Ваше имя</label>
+        <input class="field-input" type="text" name="name" placeholder="Никита" required autofocus>
+      </div>
+      <div class="field">
+        <label class="field-label">Email</label>
+        <input class="field-input" type="email" name="email" placeholder="you@example.com" required>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label">Пароль</label>
+          <input class="field-input" type="password" name="password" placeholder="Минимум 6 символов" required>
+        </div>
+        <div class="field">
+          <label class="field-label">Повторите пароль</label>
+          <input class="field-input" type="password" name="confirm" placeholder="••••••••" required>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:13px">
+        Создать аккаунт →
+      </button>
+    </form>
+
+    <div class="auth-switch">
+      Уже есть аккаунт? <a href="{{ url_for('login') }}">Войти</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

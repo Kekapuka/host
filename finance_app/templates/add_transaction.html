@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block title %}Добавить операцию — FinTrack{% endblock %}
+
+{% block content %}
+<div class="container-sm">
+  <div style="margin-top:8px">
+    <div class="page-title">Новая операция</div>
+    <div class="page-sub">Добавьте доход или расход</div>
+  </div>
+
+  <div class="add-card" style="margin-top:0">
+    <form method="POST" id="tx-form">
+
+      <!-- ТИП -->
+      <div class="field" style="margin-bottom:20px">
+        <label class="field-label">Тип операции</label>
+        <div class="type-toggle">
+          <button type="button" class="type-btn income active" id="btn-income" onclick="setType('income')">
+            ↑ Доход
+          </button>
+          <button type="button" class="type-btn expense" id="btn-expense" onclick="setType('expense')">
+            ↓ Расход
+          </button>
+        </div>
+        <input type="hidden" name="type" id="type-input" value="income">
+      </div>
+
+      <!-- КАТЕГОРИЯ и СУММА -->
+      <div class="field-row" style="margin-bottom:16px">
+        <div class="field">
+          <label class="field-label">Категория</label>
+          <input class="field-input" type="text" name="category" id="category-input"
+            placeholder="Зарплата, еда, транспорт..." required list="cat-suggestions">
+          <datalist id="cat-suggestions"></datalist>
+        </div>
+        <div class="field">
+          <label class="field-label">Сумма, ₽</label>
+          <input class="field-input" type="number" name="amount" placeholder="0.00"
+            min="0.01" step="0.01" required>
+        </div>
+      </div>
+
+      <!-- ДАТА и ЗАМЕТКА -->
+      <div class="field-row" style="margin-bottom:16px">
+        <div class="field">
+          <label class="field-label">Дата</label>
+          <input class="field-input" type="date" name="date" value="{{ today }}">
+        </div>
+        <div class="field">
+          <label class="field-label">Заметка (необязательно)</label>
+          <input class="field-input" type="text" name="note" placeholder="Краткое описание">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center;padding:13px">
+          Сохранить операцию
+        </button>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-ghost" style="padding:13px 20px">Отмена</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Быстрые категории -->
+  <div style="margin-top:24px">
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:600">Быстрый выбор категории</div>
+    <div id="quick-cats" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const incomeCategories  = ['Зарплата','Фриланс','Инвестиции','Подарок','Продажа','Другое'];
+const expenseCategories = ['Еда','Транспорт','ЖКХ','Развлечения','Здоровье','Одежда','Техника','Кафе','Спорт','Образование','Другое'];
+
+function setType(type) {
+  document.getElementById('type-input').value = type;
+  document.getElementById('btn-income').classList.toggle('active',  type === 'income');
+  document.getElementById('btn-expense').classList.toggle('active', type === 'expense');
+  renderQuickCats(type);
+}
+
+function renderQuickCats(type) {
+  const cats = type === 'income' ? incomeCategories : expenseCategories;
+  const wrap = document.getElementById('quick-cats');
+  wrap.innerHTML = cats.map(c => `
+    <button type="button" onclick="pickCat('${c}')"
+      style="background:var(--surface);border:1px solid var(--border2);border-radius:20px;
+             padding:6px 14px;font-size:13px;color:var(--text2);cursor:pointer;
+             transition:all .15s;font-family:inherit"
+      onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'"
+    >${c}</button>
+  `).join('');
+}
+
+function pickCat(cat) {
+  document.getElementById('category-input').value = cat;
+}
+
+renderQuickCats('income');
+</script>
+{% endblock %}

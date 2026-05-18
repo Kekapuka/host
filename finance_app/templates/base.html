@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}FinTrack{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+{% if current_user.is_authenticated %}
+<nav class="navbar">
+  <div class="navbar-inner">
+    <a href="{{ url_for('dashboard') }}" class="navbar-logo">
+      ◈ Fin<span>Track</span>
+    </a>
+    <div class="navbar-links">
+      <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">Обзор</a>
+      <a href="{{ url_for('add_transaction') }}" class="{% if request.endpoint == 'add_transaction' %}active{% endif %}">+ Операция</a>
+      <a href="{{ url_for('history') }}" class="{% if request.endpoint == 'history' %}active{% endif %}">История</a>
+    </div>
+    <div class="navbar-right">
+      <div class="navbar-user">
+        <div class="navbar-avatar">{{ current_user.name[0].upper() }}</div>
+        {{ current_user.name }}
+      </div>
+      <a href="{{ url_for('logout') }}" class="btn btn-ghost btn-sm">Выйти</a>
+    </div>
+  </div>
+</nav>
+{% endif %}
+
+{% with messages = get_flashed_messages(with_categories=True) %}
+  {% if messages %}
+    <div style="max-width:1200px;margin:16px auto;padding:0 32px">
+      {% for category, message in messages %}
+        <div class="flash flash-{{ 'success' if category == 'success' else 'error' }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+{% block content %}{% endblock %}
+
+<footer class="footer">
+  ◈ FinTrack — Учёт личных финансов
+</footer>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

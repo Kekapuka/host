@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+{% block title %}Обзор — FinTrack{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+    <div class="page-title">Добрый день, {{ current_user.name }} 👋</div>
+    <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">+ Добавить</a>
+  </div>
+  <div class="page-sub">Ваш финансовый обзор</div>
+
+  <!-- STATS -->
+  <div class="stats-grid">
+    <div class="stat-card balance">
+      <div class="stat-label">◈ Баланс</div>
+      <div class="stat-value {% if balance >= 0 %}positive{% else %}negative{% endif %}">
+        {{ '+ ' if balance >= 0 else '- ' }}{{ '{:,.0f}'.format(balance|abs) }} ₽
+      </div>
+    </div>
+    <div class="stat-card income">
+      <div class="stat-label">↑ Доходы</div>
+      <div class="stat-value positive">+ {{ '{:,.0f}'.format(total_income) }} ₽</div>
+    </div>
+    <div class="stat-card expense">
+      <div class="stat-label">↓ Расходы</div>
+      <div class="stat-value negative">− {{ '{:,.0f}'.format(total_expense) }} ₽</div>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="charts-grid">
+
+    <!-- Бар-чарт по месяцам -->
+    <div class="card">
+      <div class="card-title">
+        Доходы и расходы по месяцам
+        <span style="font-size:11px;color:var(--text3);text-transform:none;letter-spacing:0">последние 6 месяцев</span>
+      </div>
+      {% if recent %}
+      <canvas id="barChart" height="200"></canvas>
+      {% else %}
+      <div class="empty-state"><div class="empty-state-icon">📊</div><p>Добавьте операции, чтобы увидеть график</p></div>
+      {% endif %}
+    </div>
+
+    <!-- Расходы по категориям -->
+    <div class="card">
+      <div class="card-title">Расходы по категориям</div>
+      {% if expense_by_cat %}
+      <div class="donut-wrap">
+        <canvas id="donutChart" width="180" height="180"></canvas>
+        <div class="donut-center">
+          <div class="donut-center-val">{{ '{:,.0f}'.format(total_expense) }}</div>
+          <div class="donut-center-label">₽ расходов</div>
+        </div>
+      </div>
+      <div class="cat-legend">
+        {% set colors = ['#f26b6b','#f0c060','#5b8dee','#3ecf8e','#a78bfa','#fb923c','#34d399','#60a5fa'] %}
+        {% for cat, val in expense_by_cat.items() %}
+        <div class="cat-item">
+          <div class="cat-dot" style="background:{{ colors[loop.index0 % colors|length] }}"></div>
+          <div class="cat-name">{{ cat }}</div>
+          <div class="cat-val">{{ '{:,.0f}'.format(val) }} ₽</div>
+          <div class="cat-pct">{{ '{:.0f}'.format(val / total_expense * 100 if total_expense else 0) }}%</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state" style="padding:30px"><div class="empty-state-icon">🍩</div><p>Нет расходов</p></div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- ПОСЛЕДНИЕ ОПЕРАЦИИ -->
+  <div class="card">
+    <div class="card-title">
+      Последние операции
+      <a href="{{ url_for('history') }}" style="font-size:13px;color:var(--green);text-transform:none;letter-spacing:0;font-weight:500">Все →</a>
+    </div>
+    {% if recent %}
+    <div class="recent-list">
+      {% for tx in recent %}
+      {% set icons = {'Зарплата':'💼','Фриланс':'💻','Еда':'🍔','Транспорт':'🚇','ЖКХ':'🏠','Развлечения':'🎬','Здоровье':'💊','Одежда':'👕','Кафе':'☕','Спорт':'🏋️','Инвестиции':'📈','Образование':'📚','Техника':'⚙️','Подарок':'🎁','Другое':'💰'} %}
+      <div class="recent-item">
+        <div class="recent-icon {{ tx.type }}">
+          {{ icons.get(tx.category, '💸') }}
+        </div>
+        <div class="recent-info">
+          <div class="recent-cat">{{ tx.category }}</div>
+          <div class="recent-note">{{ tx.note or tx.date.strftime('%d.%m.%Y') }}</div>
+        </div>
+        <div class="recent-right">
+          <div class="recent-amount {{ tx.type }}">
+            {{ '+' if tx.type == 'income' else '−' }} {{ '{:,.0f}'.format(tx.amount) }} ₽
+          </div>
+          <div class="recent-date">{{ tx.date.strftime('%d.%m.%Y') }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">✦</div>
+      <p>Операций пока нет</p>
+      <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">Добавить первую</a>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CHART_MONTHS  = {{ chart_months|safe }};
+const CHART_INCOME  = {{ chart_income|safe }};
+const CHART_EXPENSE = {{ chart_expense|safe }};
+
+{% if expense_by_cat %}
+const EXP_CATS = {{ expense_by_cat.keys()|list|tojson }};
+const EXP_VALS = {{ expense_by_cat.values()|list|tojson }};
+const COLORS   = ['#f26b6b','#f0c060','#5b8dee','#3ecf8e','#a78bfa','#fb923c','#34d399','#60a5fa'];
+{% endif %}
+
+Chart.defaults.color = '#8892a4';
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+
+// Бар-чарт
+const barCtx = document.getElementById('barChart');
+if (barCtx) {
+  new Chart(barCtx, {
+    type: 'bar',
+    data: {
+      labels: CHART_MONTHS,
+      datasets: [
+        {
+          label: 'Доходы',
+          data: CHART_INCOME,
+          backgroundColor: 'rgba(62,207,142,0.7)',
+          borderColor: '#3ecf8e',
+          borderWidth: 1,
+          borderRadius: 6,
+        },
+        {
+          label: 'Расходы',
+          data: CHART_EXPENSE,
+          backgroundColor: 'rgba(242,107,107,0.7)',
+          borderColor: '#f26b6b',
+          borderWidth: 1,
+          borderRadius: 6,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: '#8892a4', font: { size: 12 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString('ru')} ₽`
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          ticks: { callback: v => v.toLocaleString('ru') + ' ₽' }
+        }
+      }
+    }
+  });
+}
+
+// Пончик
+const donutCtx = document.getElementById('donutChart');
+if (donutCtx && typeof EXP_CATS !== 'undefined') {
+  new Chart(donutCtx, {
+    type: 'doughnut',
+    data: {
+      labels: EXP_CATS,
+      datasets: [{
+        data: EXP_VALS,
+        backgroundColor: COLORS,
+        borderWidth: 2,
+        borderColor: '#13161d',
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      cutout: '68%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.parsed.toLocaleString('ru')} ₽`
+          }
+        }
+      }
+    }
+  });
+}
+</script>
+{% endblock %}

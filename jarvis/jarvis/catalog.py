@@ -519,7 +519,7 @@ def _pack_vk(app: dict[str, Any], lang: str) -> list[dict[str, Any]]:
               "включи вк музыку", "поставь музыку в вк", "запусти музыку в вк",
               "play music on vk", "play vk music"],
              [url("https://vk.com/audio"), {"type": "wait", "seconds": 4},
-              {"type": "click_element", "names": play_buttons, "timeout": 8, "optional": True}],
+              {"type": "click_element", "names": play_buttons, "app": "@browser", "timeout": 8, "optional": True}],
              _t(lang, "Включаю музыку ВКонтакте", "Playing music on VK")),
         _cmd(_t(lang, "Моя музыка", "My music"),
              ["открой мою музыку в вк", "открой музыку в вк", "моя музыка вк", "open my vk music"],
@@ -616,7 +616,8 @@ def _pack_yandexmusic(app: dict[str, Any], lang: str) -> list[dict[str, Any]]:
         ["включи мою волну", "включи яндекс музыку", "включи музыку в яндекс музыке", "play my wave"],
         [{"type": "open_url", "url": "https://music.yandex.ru/", "browser": "auto"},
          {"type": "wait", "seconds": 4},
-         {"type": "click_element", "names": ["Моя волна", "My Wave", "Слушать"], "timeout": 8, "optional": True}],
+         {"type": "click_element", "names": ["Моя волна", "My Wave", "Слушать"], "app": "@browser", "timeout": 8,
+          "optional": True}],
         _t(lang, "Включаю Мою волну", "Playing My Wave")))
     return items
 

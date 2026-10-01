@@ -26,7 +26,7 @@ export const ACTIONS = {
   system: { icon: 'power', fields: [['op', 'system']], defaults: { op: 'lock' } },
   wait: { icon: 'wait', fields: [['seconds', 'number']], defaults: { seconds: 1 } },
   say: { icon: 'message', fields: [['text', 'text']], defaults: { text: '' } },
-  click_element: { icon: 'cursor', fields: [['names', 'chips'], ['timeout', 'number']], defaults: { names: [], timeout: 6 } },
+  click_element: { icon: 'cursor', fields: [['names', 'chips'], ['app', 'app'], ['timeout', 'number']], defaults: { names: [], app: '@browser', timeout: 6 } },
   ask_ai: { icon: 'spark', fields: [['prompt', 'text']], defaults: { prompt: '{_text}' } },
   run_command: { icon: 'command', fields: [['path', 'command']], defaults: { path: '' } },
   run: { icon: 'terminal', fields: [['command', 'text'], ['hidden', 'switch']], defaults: { command: '', hidden: true } },
@@ -592,7 +592,8 @@ export function createEditorPane() {
         const paint = () => {
           const v = input.value.trim();
           const app = store.catalog?.apps?.find((a) => a.id === v);
-          hint.textContent = !v ? `→ ${t('field.app.folder')}` : v === '@browser' ? `→ ${t('field.app.browser')}`
+          const emptyHint = action.type === 'click_element' ? t('field.app.active') : t('field.app.folder');
+          hint.textContent = !v ? `→ ${emptyHint}` : v === '@browser' ? `→ ${t('field.app.browser')}`
             : /^\{.+\}$/.test(v) ? `→ ${t('field.app.spoken')}` : app ? `→ ${app.name}` : '';
         };
         paint();

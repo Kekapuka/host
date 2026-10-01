@@ -783,6 +783,8 @@ textarea.input.sm { padding: 7px 10px; height: auto; }
 .example:hover { background: var(--surface); color: var(--fg); }
 .example:hover::before { color: var(--fg); }
 .ctl-status { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 18px 16px; margin-top: auto; }
+button.chip-status { background: transparent; cursor: pointer; }
+button.chip-status:hover { border-color: var(--fg); color: var(--fg); }
 .chip-status {
   display: inline-flex;
   align-items: center;

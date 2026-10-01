@@ -1,10 +1,10 @@
 # Окно приложения (Edge WebView2 на Windows)
-pywebview>=5.3
+pywebview>=5.3,<7
 # Распознавание речи (Google Web Speech) и микрофон
-SpeechRecognition>=3.10
-sounddevice>=0.4.6
+SpeechRecognition>=3.10,<4
+sounddevice>=0.4.6,<1
 # Голос Джарвиса: нейросетевые голоса Microsoft + воспроизведение
-edge-tts>=6.1.10
-pygame-ce>=2.4
+edge-tts>=6.1.10,<8
+pygame-ce>=2.4,<3
 # Системный голос Windows (SAPI) и нажатие кнопок через UI Automation
-comtypes>=1.4; sys_platform == "win32"
+comtypes>=1.4,<2; sys_platform == "win32"

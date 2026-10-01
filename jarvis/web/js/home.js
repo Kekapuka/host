@@ -7,7 +7,7 @@ import { button, confirmDialog, h, ico, iconButton, segmented, slider, timeLabel
 
 const METER_CELLS = 28;
 
-export function createHome({ onThemeToggle }) {
+export function createHome({ onThemeToggle, onOpenSettings }) {
   const el = h('section', { class: 'layer home-layer', id: 'page-home' });
 
   // --- hero: greeting, microphone, live transcript -----------------------------------------
@@ -240,8 +240,9 @@ export function createHome({ onThemeToggle }) {
     const s = store.settings;
     const sttKey = { auto: 'settings.stt.auto', ru: 'settings.stt.ru', en: 'settings.stt.en' }[s.stt_language] || 'settings.stt.auto';
     statusChips.replaceChildren(
-      h('span', { class: `chip-status ${s.ai_api_key ? 'ok' : ''}` }, h('span', { class: 'status-dot' }),
-        s.ai_api_key ? t('panel.ai.on') : t('panel.ai.off')),
+      h('button', { type: 'button', class: `chip-status ${s.ai_api_key ? 'ok' : ''}`, title: t('settings.ai'),
+        onclick: () => onOpenSettings?.() }, h('span', { class: 'status-dot' }),
+      s.ai_api_key ? t('panel.ai.on') : t('panel.ai.off')),
       h('span', { class: 'chip-status', title: t('settings.stt') }, ico('globe', 13), t(sttKey)));
   }
 

@@ -58,7 +58,7 @@ function buildSidebar() {
     h('div', { class: 'side-foot' }, sideMic, sideVersion));
 }
 
-const home = createHome({ onThemeToggle: switchTheme });
+const home = createHome({ onThemeToggle: switchTheme, onOpenSettings: () => navigate('settings') });
 const editorPane = createEditorPane();
 const appsPane = createAppsPane({ onOpenFolder: (path) => { setEditorTab('editor'); editorPane.open(path); } });
 const settingsPage = createSettings({ onThemeToggle: switchTheme });

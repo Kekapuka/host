@@ -65,7 +65,9 @@ def title_of(hwnd: int) -> str:
 
 
 def check_typing() -> None:
-    subprocess.Popen(["notepad.exe"])
+    resolver = AppResolver()
+    target = resolver.resolve("notepad")
+    resolver.launch(target)  # ShellExecute, like "открой блокнот"
     hwnd = wait_window(["notepad.exe"])
     assert hwnd, "Notepad window did not appear"
     print("notepad window:", title_of(hwnd))
@@ -114,10 +116,49 @@ def check_click_in_browser() -> None:
         winapi.kill_processes(target.process, force=True)
 
 
+def check_command_chain() -> None:
+    """The "открой хром и включи музыку в вк" chain through the real executor, with a local page
+    standing in for vk.com/audio."""
+    import functools
+    import http.server
+    import threading
+
+    from jarvis.actions import ExecContext, Executor
+
+    folder = Path(tempfile.mkdtemp())
+    (folder / "audio.html").write_text(
+        "<!doctype html><meta charset='utf-8'><title>Jarvis chain test</title>"
+        "<button onclick=\"document.title='PLAYING'\">Перемешать все</button>", encoding="utf-8")
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(folder))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}/audio.html"
+    executor = Executor(AppResolver())
+    ctx = ExecContext({})
+    try:
+        executor.run([{"type": "open_app", "app": "chrome"}], ctx)  # "открой хром"
+        assert executor.last_browser == "chrome", executor.last_browser
+        assert wait_window(["chrome.exe"], timeout=30), "Chrome did not start"
+        time.sleep(3)
+        executor.run([  # "включи музыку в вк"
+            {"type": "open_url", "url": url, "browser": "auto"},
+            {"type": "wait", "seconds": 3},
+            {"type": "click_element", "names": ["Перемешать все", "Слушать"], "app": "@browser", "timeout": 20},
+        ], ctx)
+        hwnd = wait_window(["chrome.exe"], "PLAYING", timeout=10)
+        print("chain result window:", title_of(hwnd) if hwnd else None)
+        assert hwnd, "the page button was not pressed"
+        print("CHAIN OK")
+    finally:
+        server.shutdown()
+        winapi.kill_processes(["chrome.exe"], force=True)
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     check_typing()
     check_click_in_browser()
+    check_command_chain()
     print("ACTIONS SMOKE OK")
     return 0
 

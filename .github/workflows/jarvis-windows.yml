@@ -1,0 +1,58 @@
+name: Jarvis — Windows build
+
+on:
+  push:
+    paths:
+      - "jarvis/**"
+      - ".github/workflows/jarvis-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: jarvis
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Unit tests
+        run: python -m pytest -q
+
+      - name: Windows integration smoke test
+        run: python scripts/smoke_windows.py
+
+      - name: Build Jarvis.exe
+        run: python -m PyInstaller --noconfirm --clean jarvis.spec
+
+      - name: Start the built app (browser mode)
+        shell: pwsh
+        run: |
+          $env:JARVIS_HOME = Join-Path $env:RUNNER_TEMP "jarvis-home"
+          $p = Start-Process -FilePath "dist\Jarvis\Jarvis.exe" -ArgumentList "--browser","--no-open","--no-voice","--port","8765" -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 40; $i++) {
+            Start-Sleep -Seconds 1
+            try {
+              $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8765/" -TimeoutSec 3
+              if ($r.StatusCode -eq 200 -and $r.Content -match "JARVIS_TOKEN") { $ok = $true; break }
+            } catch {}
+          }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Get-Content (Join-Path $env:JARVIS_HOME "jarvis.log") -ErrorAction SilentlyContinue | Select-Object -Last 40
+          if (-not $ok) { throw "Jarvis.exe did not start" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Jarvis-windows
+          path: jarvis/dist/Jarvis
+          retention-days: 30

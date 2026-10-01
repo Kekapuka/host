@@ -133,6 +133,10 @@ def check_command_chain() -> None:
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{server.server_address[1]}/audio.html"
+    # a Chrome that has been used before: no first-run welcome window
+    first_run = Path(os.environ["LOCALAPPDATA"]) / "Google" / "Chrome" / "User Data" / "First Run"
+    first_run.parent.mkdir(parents=True, exist_ok=True)
+    first_run.touch()
     executor = Executor(AppResolver())
     ctx = ExecContext({})
     try:
@@ -140,6 +144,7 @@ def check_command_chain() -> None:
         assert executor.last_browser == "chrome", executor.last_browser
         assert wait_window(["chrome.exe"], timeout=30), "Chrome did not start"
         time.sleep(3)
+        print("chrome windows before:", [w["title"] for w in winapi.list_windows() if w["exe"] == "chrome.exe"])
         executor.run([  # "включи музыку в вк"
             {"type": "open_url", "url": url, "browser": "auto"},
             {"type": "wait", "seconds": 3},
@@ -147,6 +152,8 @@ def check_command_chain() -> None:
         ], ctx)
         hwnd = wait_window(["chrome.exe"], "PLAYING", timeout=10)
         print("chain result window:", title_of(hwnd) if hwnd else None)
+        if not hwnd:
+            print("chrome windows:", [w["title"] for w in winapi.list_windows() if w["exe"] == "chrome.exe"])
         assert hwnd, "the page button was not pressed"
         print("CHAIN OK")
     finally:

@@ -171,6 +171,15 @@ class Executor:
                     winapi.focus_window(w["hwnd"])
                     break
 
+    def _browser_windows(self) -> list[int]:
+        """Browser windows: the foreground one first, then those of the browser Jarvis opened."""
+        procs = {p.lower() for b in catalog.BROWSER_IDS for p in catalog.APPS_BY_ID[b]["process"]}
+        windows = [w for w in winapi.list_windows() if w["exe"] in procs]
+        fg = winapi.foreground_window()
+        own = {p.lower() for p in catalog.APPS_BY_ID[self.last_browser]["process"]} if self.last_browser else set()
+        windows.sort(key=lambda w: (w["hwnd"] != fg, w["exe"] not in own))
+        return [w["hwnd"] for w in windows]
+
     def _focus_browser(self, ctx: ExecContext) -> None:
         procs = {p.lower() for b in catalog.BROWSER_IDS for p in catalog.APPS_BY_ID[b]["process"]}
         windows = winapi.list_windows()
@@ -345,15 +354,18 @@ class Executor:
         names = [self._text(n, ctx) for n in names]
         if not names:
             raise ActionError(_msg(ctx.lang, "Не указан текст кнопки", "No button text given"))
-        hwnd = None
         app = self._text(a.get("app"), ctx)
+        windows = None
         if app == "@browser":
-            self._focus_browser(ctx)
+            try:
+                self._focus_browser(ctx)
+            except ActionError:
+                pass  # the page may still be in a background browser window
+            windows = self._browser_windows
         elif app:
             proc, _ = self.resolver.process_names(app, ctx.folder_meta)
-            windows = winapi.find_windows(proc)
-            hwnd = windows[0] if windows else None
-        pressed = winapi.click_element(names, hwnd=hwnd, timeout=float(a.get("timeout") or 6))
+            windows = lambda: winapi.find_windows(proc)  # noqa: E731
+        pressed = winapi.click_element(names, timeout=float(a.get("timeout") or 6), windows=windows)
         if not pressed:
             raise ActionError(_msg(ctx.lang, f"Не нашёл кнопку «{names[0]}»", f"Button “{names[0]}” not found"))
 

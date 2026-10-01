@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import time
+from typing import Callable
 
 from .paths import IS_WINDOWS
 
@@ -512,11 +513,13 @@ def _uia():
     return UIA, uia
 
 
-def click_element(names: list[str], hwnd: int | None = None, timeout: float = 6.0) -> str | None:
-    """Find a control whose name contains one of `names` inside the window and press it.
+def click_element(names: list[str], hwnd: int | None = None, timeout: float = 6.0,
+                  windows: Callable[[], list[int]] | None = None) -> str | None:
+    """Find a control whose name contains one of `names` and press it.
 
-    Works for browsers too (Chrome/Edge/Yandex expose page buttons to UI Automation).
-    Returns the name that was pressed or None.
+    Searches `hwnd`, or every window returned by `windows()` (re-evaluated while waiting, so
+    windows that appear later are included), or the foreground window. Works for browsers too:
+    Chrome/Edge/Yandex expose page buttons to UI Automation. Returns the pressed name or None.
     """
     if not IS_WINDOWS:
         raise NotSupported("Нажатие элементов доступно только в Windows")
@@ -524,21 +527,28 @@ def click_element(names: list[str], hwnd: int | None = None, timeout: float = 6.
         UIA, uia = _uia()
     except Exception as exc:  # comtypes missing or broken
         raise RuntimeError(f"UI Automation недоступен: {exc}") from exc
-    hwnd = hwnd or foreground_window()
-    if not hwnd:
-        return None
-    root = uia.ElementFromHandle(wintypes.HWND(hwnd))
+    names = [n for n in names if n]
     flags = PropertyConditionFlags_IgnoreCase | PropertyConditionFlags_MatchSubstring
     invokable = uia.CreatePropertyCondition(UIA_IsInvokePatternAvailablePropertyId, True)
+    conditions = []
+    for strict in (True, False):
+        for name in names:
+            cond = uia.CreatePropertyConditionEx(UIA_NamePropertyId, name, flags)
+            conditions.append((name, uia.CreateAndCondition(cond, invokable) if strict else cond))
     deadline = time.time() + max(0.5, timeout)
     while True:
-        for strict in (True, False):
-            for name in names:
-                if not name:
-                    continue
-                cond = uia.CreatePropertyConditionEx(UIA_NamePropertyId, name, flags)
-                if strict:
-                    cond = uia.CreateAndCondition(cond, invokable)
+        if hwnd:
+            targets = [hwnd]
+        elif windows is not None:
+            targets = windows()
+        else:
+            targets = [foreground_window()]
+        for target in [t for t in dict.fromkeys(targets) if t]:
+            try:
+                root = uia.ElementFromHandle(wintypes.HWND(target))
+            except Exception:
+                continue
+            for name, cond in conditions:
                 try:
                     element = root.FindFirst(TreeScope_Descendants, cond)
                 except Exception:

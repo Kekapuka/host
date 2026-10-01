@@ -29,6 +29,7 @@ class Api:
         app = self._app
         app.ready_event_id = app.bus.last_id
         app.frontend_ready.set()
+        log.info("UI connected (%s mode)", app.mode)
         return {
             "last_event": app.ready_event_id,
             "version": __version__,

@@ -177,6 +177,7 @@ class _EventPusher:
     def __init__(self, app: JarvisApp):
         self.app = app
         self.queue: queue.Queue[dict[str, Any]] = queue.Queue()
+        self.delivered = False
 
     def push(self, event: dict[str, Any]) -> None:
         self.queue.put(event)
@@ -202,6 +203,9 @@ class _EventPusher:
             try:
                 payload = json.dumps(batch, ensure_ascii=False)
                 window.run_js(f"window.__jarvis && window.__jarvis.dispatch({payload})")
+                if not self.delivered:
+                    self.delivered = True
+                    log.info("UI events delivered")
             except Exception as exc:
                 log.debug("UI push failed: %s", exc)
 

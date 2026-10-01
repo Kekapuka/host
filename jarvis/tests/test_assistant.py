@@ -193,3 +193,26 @@ def test_settings_validation_and_persistence(jarvis_home):
     s.update({"ai_api_key": "sk-test"})
     again = Settings()
     assert again.get("volume") == 100 and again.get("ai_api_key") == "sk-test"
+
+
+def test_cancel_interrupts_running_chain(env):
+    assistant, executor, speaker, _, _ = env
+
+    def slow_run(actions, ctx):
+        executor.calls.append([a["type"] for a in actions])
+        if ctx.cancel.wait(3):
+            raise ActionError("Выполнение отменено")
+        return ctx
+
+    executor.run = slow_run
+    assistant.submit_text("открой хром и включи музыку в вк")
+    assert wait_for(lambda: executor.calls)
+    start = time.time()
+    assistant.submit_text("отмена")
+    assert wait_for(lambda: assistant.history.all()[0]["status"] == "cancelled", timeout=2)
+    assert time.time() - start < 1.5
+    first = assistant.history.all()[0]
+    assert [s["status"] for s in first["steps"]] == ["cancelled", "cancelled"]
+    assert first["reply"] == "Отменено."
+    time.sleep(0.2)
+    assert len(assistant.history.all()) == 1  # the cancel word itself is not a new command

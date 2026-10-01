@@ -203,12 +203,33 @@ class Assistant:
             if self.phase == "recognizing":
                 self._set_phase(self._idle_phase())
             if candidates:
+                if self._busy and self._interrupt_if_cancel([c.text for c in candidates[:3]], voice=True):
+                    self.bus.emit("heard", {"text": candidates[0].text, "addressed": True})
+                    continue
                 self._jobs.put(("voice", candidates))
+
+    def _interrupt_if_cancel(self, texts: list[str], voice: bool) -> bool:
+        """"Джарвис, отмена" stops a running chain at once instead of waiting in the queue."""
+        words = self.settings.get("cancel_words")
+        for text in texts:
+            if voice:
+                found, rest = find_wake_word(text, self.settings.get("wake_word"))
+                if not found:
+                    continue
+                text = rest
+            if text and match_word_list(text, words, strict=True):
+                self.cancel()
+                return True
+        return False
 
     # --- public entry points ----------------------------------------------------------------
     def submit_text(self, text: str, source: str = "text") -> None:
         text = (text or "").strip()
         if text:
+            if self._busy:
+                found, rest = find_wake_word(text, self.settings.get("wake_word"))
+                if self._interrupt_if_cancel([rest if found else text], voice=False):
+                    return
             self._jobs.put(("text", (text, source)))
 
     def confirm(self, entry_id: str | None, yes: bool) -> None:
@@ -466,14 +487,17 @@ class Assistant:
                 self.executor.run(actions, ctx)
                 status, error = "ok", ""
             except ActionError as exc:
-                status, error = "error", str(exc)
+                status, error = ("cancelled" if self._cancel.is_set() else "error"), str(exc)
             response = render_template(response_tpl, ctx.vars) if response_tpl else ""
             if status == "ok":
                 if response:
                     replies.append(response)
                 replies.extend(ctx.messages)
+            elif status == "cancelled":
+                if phrase(lang, "cancelled") not in replies:
+                    replies.append(phrase(lang, "cancelled"))
             else:
-                replies.append(error if self._cancel.is_set() else phrase(lang, "failed", error=error))
+                replies.append(phrase(lang, "failed", error=error))
             infos.append(self._step_info(step, status, error))
         statuses = {i["status"] for i in infos}
         if statuses <= {"ok"}:

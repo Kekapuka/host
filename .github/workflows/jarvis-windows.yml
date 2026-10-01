@@ -54,6 +54,25 @@ jobs:
           Get-Content (Join-Path $env:JARVIS_HOME "jarvis.log") -ErrorAction SilentlyContinue | Select-Object -Last 40
           if (-not $ok) { throw "Jarvis.exe did not start" }
 
+      - name: Start the built app (window mode, WebView2)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $home2 = Join-Path $env:RUNNER_TEMP "jarvis-window"
+          New-Item -ItemType Directory -Force -Path $home2 | Out-Null
+          '{"mic_autostart": true}' | Set-Content -Encoding utf8 (Join-Path $home2 "settings.json")
+          $env:JARVIS_HOME = $home2
+          $p = Start-Process -FilePath "dist\Jarvis\Jarvis.exe" -ArgumentList "--no-voice" -PassThru
+          $log = Join-Path $home2 "jarvis.log"
+          $ok = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            Start-Sleep -Seconds 1
+            if ((Test-Path $log) -and (Select-String -Path $log -Pattern "UI events delivered" -Quiet)) { $ok = $true; break }
+          }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Get-Content $log -ErrorAction SilentlyContinue | Select-Object -Last 40
+          if (-not $ok) { throw "The window UI did not connect to the core" }
+
       - uses: actions/upload-artifact@v4
         with:
           name: Jarvis-windows

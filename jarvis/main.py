@@ -11,6 +11,16 @@ import logging.handlers
 import sys
 
 
+def setup_console() -> None:
+    """Russian text must not crash printing to a cp1252/cp866 pipe on Windows."""
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (OSError, ValueError):
+                pass
+
+
 def setup_logging(debug: bool) -> None:
     from jarvis import paths
 
@@ -44,6 +54,7 @@ def single_instance() -> bool:
 
 
 def main() -> int:
+    setup_console()
     parser = argparse.ArgumentParser(description="Jarvis — голосовой ассистент")
     parser.add_argument("--browser", action="store_true", help="открыть интерфейс в браузере")
     parser.add_argument("--port", type=int, default=0, help="порт для режима браузера")

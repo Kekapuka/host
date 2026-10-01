@@ -266,8 +266,12 @@ class Speaker:
             return
         try:
             freq, _size, channels = pygame.mixer.get_init()
-            pcm = _chime_pcm(freq, channels, volume)
-            pygame.mixer.Sound(buffer=pcm).play()
+            sound = pygame.mixer.Sound(buffer=_chime_pcm(freq, channels, volume))
+            channel = sound.play()
+            # the Sound must stay alive until it finishes, otherwise SDL stops it at once
+            deadline = time.time() + 2
+            while channel is not None and channel.get_busy() and time.time() < deadline:
+                time.sleep(0.02)
         except Exception as exc:
             log.debug("chime failed: %s", exc)
 

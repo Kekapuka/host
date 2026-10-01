@@ -13,6 +13,7 @@ from jarvis import apps, catalog, winapi  # noqa: E402
 
 def main() -> int:
     assert sys.platform == "win32", "run this on Windows"
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     secret = "sk-проверка".encode("utf-8")
     assert winapi.dpapi_unprotect(winapi.dpapi_protect(secret)) == secret
     print("DPAPI: ok")

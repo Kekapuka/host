@@ -139,4 +139,4 @@ web/                 интерфейс (HTML, CSS, JS без сборки)
 tests/               pytest
 ```
 
-Тесты: `pip install -r requirements-dev.txt` и `python -m pytest`. Проверка интеграции с Windows: `python scripts/smoke_windows.py`.
+Тесты: `pip install -r requirements-dev.txt` и `python -m pytest`. Проверка интеграции с Windows: `python scripts/smoke_windows.py` (DPAPI, поиск программ, голоса, UI Automation) и `python scripts/smoke_windows_actions.py` (печать в Блокнот, нажатие кнопки на странице в Chrome и цепочка «открой хром → открой страницу → нажми кнопку» — откроет и закроет Блокнот и Chrome). Всё это автоматически выполняется в GitHub Actions на Windows вместе со сборкой `Jarvis.exe`.

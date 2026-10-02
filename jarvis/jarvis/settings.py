@@ -1,4 +1,4 @@
-"""User settings stored in settings.json (the DeepSeek key is encrypted with DPAPI on Windows)."""
+"""User settings stored in settings.json (API keys are encrypted with DPAPI on Windows)."""
 from __future__ import annotations
 
 import base64
@@ -26,8 +26,12 @@ DEFAULTS: dict[str, Any] = {
     "confirm_words": ["да", "правильно", "подтверждаю"],
     "cancel_words": ["нет", "отмена", "отменить"],
     "chain_words": ["и", "затем", "потом"],
-    "ai_provider": "deepseek",
-    "ai_api_key": "",
+    "ai_provider": "openrouter",
+    "ai_api_key": "",  # DeepSeek
+    "openrouter_api_key": "",
+    "ollama_url": "http://localhost:11434",
+    "custom_url": "",
+    "custom_api_key": "",
     "ai_model": "auto",
 }
 
@@ -36,9 +40,10 @@ CHOICES = {
     "language": ("ru", "en"),
     "voice_engine": ("neural", "system"),
     "stt_language": ("auto", "ru", "en"),
-    "ai_provider": ("deepseek",),
+    "ai_provider": ("openrouter", "ollama", "deepseek", "custom"),
 }
 WORD_LISTS = ("confirm_words", "cancel_words", "chain_words")
+SECRETS = ("ai_api_key", "openrouter_api_key", "custom_api_key")
 
 
 def _clean_words(value: Any) -> list[str]:
@@ -76,7 +81,7 @@ def validate(key: str, value: Any) -> Any:
         if value in (None, "", "default"):
             return None
         return str(value)[:200]
-    if key == "ai_api_key":
+    if key in SECRETS or key in ("ollama_url", "custom_url"):
         return str(value or "").strip()[:300]
     if key == "ai_model":
         return (str(value or "").strip() or "auto")[:80]
@@ -101,30 +106,33 @@ class Settings:
                         self._data[key] = validate(key, raw[key])
                     except (ValueError, TypeError, KeyError) as exc:
                         log.warning("Ignoring setting %s: %s", key, exc)
-            enc = raw.get("ai_api_key_dpapi")
-            if enc:
+            for name in SECRETS:
+                enc = raw.get(f"{name}_dpapi")
+                if not enc:
+                    continue
                 try:
                     from .winapi import dpapi_unprotect
 
-                    self._data["ai_api_key"] = dpapi_unprotect(base64.b64decode(enc)).decode("utf-8")
+                    self._data[name] = dpapi_unprotect(base64.b64decode(enc)).decode("utf-8")
                 except Exception as exc:
-                    log.warning("Cannot decrypt the API key: %s", exc)
+                    log.warning("Cannot decrypt %s: %s", name, exc)
 
     def save(self) -> None:
         with self._lock:
             data = copy.deepcopy(self._data)
-        key = data.pop("ai_api_key", "")
-        if key:
+        for name in SECRETS:
+            secret = data.pop(name, "")
+            if not secret:
+                continue
             if paths.IS_WINDOWS:
                 try:
                     from .winapi import dpapi_protect
 
-                    data["ai_api_key_dpapi"] = base64.b64encode(dpapi_protect(key.encode("utf-8"))).decode()
+                    data[f"{name}_dpapi"] = base64.b64encode(dpapi_protect(secret.encode("utf-8"))).decode()
+                    continue
                 except Exception as exc:
-                    log.warning("DPAPI failed, storing the key as plain text: %s", exc)
-                    data["ai_api_key"] = key
-            else:
-                data["ai_api_key"] = key
+                    log.warning("DPAPI failed, storing %s as plain text: %s", name, exc)
+            data[name] = secret
         write_json_atomic(self._path, data)
 
     # --- access -----------------------------------------------------------------------------
@@ -144,6 +152,8 @@ class Settings:
         clean = {k: validate(k, v) for k, v in (patch or {}).items()}
         changed: dict[str, Any] = {}
         with self._lock:
+            if clean.get("ai_provider", self._data["ai_provider"]) != self._data["ai_provider"]:
+                clean.setdefault("ai_model", "auto")  # models differ between providers
             for key, value in clean.items():
                 if self._data.get(key) != value:
                     self._data[key] = value

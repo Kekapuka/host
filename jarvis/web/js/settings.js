@@ -1,6 +1,7 @@
 // Settings page.
 import { api } from './bridge.js';
 import { t } from './i18n.js';
+import { PRIVACY_URL, PROVIDER_ORDER, PROVIDERS } from './providers.js';
 import { store, updateSettings, watch } from './state.js';
 import { button, chipsInput, confirmDialog, debounce, h, ico, segmented, slider, toast, toggle } from './ui.js';
 
@@ -13,7 +14,10 @@ export function createSettings({ onThemeToggle }) {
 
   const controls = {};
   let micDevices = null;
-  let models = [];
+  const aiBox = h('div', { class: 'ai-box' });
+  const modelsBy = {}; // provider -> models it offers
+  let aiStatus = null; // result of the last "Check"
+  let ai = null; // controls of the rendered provider
 
   const save = async (patch) => {
     try {
@@ -49,6 +53,157 @@ export function createSettings({ onThemeToggle }) {
       ...micDevices.map((d) => h('option', { value: d.id }, d.name)));
     if (current && !micDevices.some((d) => d.id === current)) select.append(h('option', { value: current }, current));
     select.value = current;
+  }
+
+  function colRow(titleKey, descKey, ...content) {
+    return h('div', { class: 'set-row col' }, h('div', { class: 'set-text' }, h('div', { class: 'set-title' }, t(titleKey)),
+      descKey ? h('div', { class: 'set-desc' }, t(descKey)) : null), ...content);
+  }
+
+  // "ollama pull qwen2.5:7b" in a text -> a monospace command
+  function withCommands(text) {
+    return String(text).split(/(ollama pull [\w.:/-]*\w)/).map((part, i) => (i % 2 ? h('code', { class: 'cmd mono' }, part) : part));
+  }
+
+  function linkButton(label, url) {
+    return button({ label, iconName: 'external', kind: 'sm', onclick: () => api.open_link(url).catch((e) => toast(e.message, 'error')) });
+  }
+
+  async function switchProvider(id) {
+    aiStatus = null;
+    await save({ ai_provider: id });
+    renderAI();
+  }
+
+  function paintStatus() {
+    const el = ai?.status;
+    if (!el) return;
+    const st = aiStatus && aiStatus.provider === ai.provider ? aiStatus : null;
+    el.className = `key-status ${st ? st.kind : ''}`.trim();
+    el.replaceChildren();
+    if (!st) return;
+    el.append(h('div', { class: 'key-status-text' }, st.text));
+    if (st.hint) el.append(h('div', { class: 'key-status-hint' }, withCommands(st.hint)));
+    const actions = [];
+    if (st.code === 'no_balance' && st.provider === 'deepseek') {
+      actions.push(button({ label: t('settings.key.toOpenRouter'), iconName: 'spark', kind: 'sm', onclick: () => switchProvider('openrouter') }));
+    }
+    if (st.code === 'privacy') actions.push(linkButton(t('provider.link.privacy'), PRIVACY_URL));
+    if (st.code === 'daily_limit') {
+      actions.push(button({ label: t('settings.key.toOllama'), iconName: 'spark', kind: 'sm', onclick: () => switchProvider('ollama') }));
+    }
+    if (actions.length) el.append(h('div', { class: 'key-status-actions' }, ...actions));
+  }
+
+  async function loadModels(provider) {
+    if (modelsBy[provider]) return;
+    modelsBy[provider] = [];
+    try {
+      const list = await api.ai_models(provider);
+      if (list?.length && !modelsBy[provider].length) modelsBy[provider] = list;
+    } catch { /* the list is optional */ }
+    if (ai?.provider === provider) ai.fillModels();
+  }
+
+  async function runCheck(p, keyInput, urlInput, check) {
+    const meta = PROVIDERS[p];
+    const key = keyInput ? keyInput.value.trim() : null;
+    const url = urlInput ? urlInput.value.trim() : null;
+    check.disabled = true;
+    aiStatus = { provider: p, kind: 'busy', text: t('settings.key.checking') };
+    paintStatus();
+    try {
+      const patch = {};
+      if (keyInput) patch[meta.key] = key;
+      if (urlInput) patch[meta.url] = url;
+      await updateSettings(patch);
+      const res = await api.ai_test(p, key, url);
+      if (res.models?.length) modelsBy[p] = res.models;
+      if (res.ok) {
+        const parts = [t('settings.key.ok', { model: res.model })];
+        if (res.balance) parts.push(t('settings.key.balance', { balance: res.balance }));
+        if (res.free_per_day) parts.push(t('settings.key.free', { n: res.free_per_day }));
+        aiStatus = { provider: p, kind: 'ok', text: parts.join(' · ') };
+      } else {
+        const warn = res.code === 'no_balance';
+        aiStatus = { provider: p, kind: warn ? 'warn' : 'err', code: res.code, hint: res.hint,
+          text: warn ? res.error : t('settings.key.fail', { error: res.error }) };
+      }
+    } catch (err) {
+      aiStatus = { provider: p, kind: 'err', text: t('settings.key.fail', { error: err.message }) };
+    } finally {
+      check.disabled = false;
+    }
+    if (ai?.provider === p) {
+      ai.fillModels();
+      paintStatus();
+    }
+  }
+
+  function renderAI() {
+    const s = store.settings;
+    const p = PROVIDERS[s.ai_provider] ? s.ai_provider : 'openrouter';
+    const meta = PROVIDERS[p];
+
+    const provider = h('select', { class: 'select provider-select' },
+      ...PROVIDER_ORDER.map((id) => h('option', { value: id }, t(`provider.${id}`))));
+    provider.value = p;
+    provider.addEventListener('change', () => switchProvider(provider.value));
+    const about = h('div', { class: 'provider-about' }, h('div', {}, withCommands(t(`provider.${p}.about`))),
+      meta.links.length ? h('div', { class: 'provider-links' }, ...meta.links.map(([key, url]) => linkButton(t(key), url))) : null);
+    const rows = [row('settings.provider', 'settings.provider.desc', provider, about)];
+
+    const status = h('div', { class: 'key-status' });
+    const check = button({ label: t('settings.key.check'), iconName: 'key', kind: 'sm' });
+    let urlInput = null;
+    let keyInput = null;
+    if (meta.url) {
+      urlInput = h('input', { class: 'input mono', spellcheck: 'false', autocomplete: 'off', placeholder: meta.urlPlaceholder });
+      urlInput.value = s[meta.url] || '';
+      urlInput.addEventListener('input', debounce(() => save({ [meta.url]: urlInput.value.trim() }), 700));
+      rows.push(colRow('settings.url', `settings.url.desc.${p}`, h('div', { class: 'input-row' }, urlInput, meta.key ? null : check)));
+    }
+    if (meta.key) {
+      keyInput = h('input', { class: 'input mono key-input', type: 'password', spellcheck: 'false', autocomplete: 'off', placeholder: meta.keyPlaceholder });
+      keyInput.value = s[meta.key] || '';
+      keyInput.addEventListener('input', debounce(() => save({ [meta.key]: keyInput.value.trim() }), 700));
+      const eye = h('button', { type: 'button', class: 'btn icon ghost sm', title: t('settings.key.show') }, ico('eye', 16));
+      eye.addEventListener('click', () => {
+        keyInput.type = keyInput.type === 'password' ? 'text' : 'password';
+        eye.replaceChildren(ico(keyInput.type === 'password' ? 'eye' : 'eyeOff', 16));
+      });
+      rows.push(colRow('settings.key', `settings.key.desc.${p}`, h('div', { class: 'input-row' }, keyInput, eye, check)));
+    }
+    rows[rows.length - 1].append(status);
+    check.addEventListener('click', () => runCheck(p, keyInput, urlInput, check));
+
+    let modelControl;
+    let fillModels;
+    if (p === 'custom') {
+      const list = h('datalist', { id: 'ai-models' });
+      const input = h('input', { class: 'input mono model-input', spellcheck: 'false', autocomplete: 'off', list: 'ai-models', placeholder: t('settings.model.auto') });
+      input.value = s.ai_model && s.ai_model !== 'auto' ? s.ai_model : '';
+      input.addEventListener('input', debounce(() => save({ ai_model: input.value.trim() || 'auto' }), 700));
+      fillModels = () => list.replaceChildren(...(modelsBy[p] || []).map((m) => h('option', { value: m })));
+      modelControl = h('div', { class: 'model-wrap' }, input, list);
+    } else {
+      const select = h('select', { class: 'select' });
+      fillModels = () => {
+        const current = store.settings.ai_model || 'auto';
+        const opts = ['auto', ...(modelsBy[p] || []).filter((m) => m !== 'auto')];
+        if (!opts.includes(current)) opts.push(current);
+        select.replaceChildren(...opts.map((m) => h('option', { value: m }, m === 'auto' ? t('settings.model.auto') : m)));
+        select.value = current;
+      };
+      select.addEventListener('change', () => save({ ai_model: select.value }));
+      modelControl = select;
+    }
+    rows.push(row('settings.model', `settings.model.desc.${p}`, modelControl));
+    aiBox.replaceChildren(...rows);
+    ai = { provider: p, status, fillModels };
+    fillModels();
+    paintStatus();
+    loadModels(p);
   }
 
   function render() {
@@ -99,52 +254,7 @@ export function createSettings({ onThemeToggle }) {
     controls.chain_words = wordList('chain_words');
 
     // 5. AI provider
-    const provider = h('select', { class: 'select' }, h('option', { value: 'deepseek' }, 'DeepSeek'));
-    provider.value = s.ai_provider;
-    provider.addEventListener('change', () => save({ ai_provider: provider.value }));
-    const key = h('input', { class: 'input mono key-input', type: 'password', spellcheck: 'false', autocomplete: 'off', placeholder: 'sk-…' });
-    key.value = s.ai_api_key || '';
-    const saveKey = debounce(() => save({ ai_api_key: key.value.trim() }), 700);
-    key.addEventListener('input', saveKey);
-    const eye = h('button', { type: 'button', class: 'btn icon ghost sm', title: t('settings.key.show') }, ico('eye', 16));
-    eye.addEventListener('click', () => {
-      key.type = key.type === 'password' ? 'text' : 'password';
-      eye.replaceChildren(ico(key.type === 'password' ? 'eye' : 'eyeOff', 16));
-    });
-    const keyStatus = h('div', { class: 'key-status' });
-    const model = h('select', { class: 'select' });
-    const fillModels = () => {
-      const current = store.settings.ai_model || 'auto';
-      const opts = ['auto', ...models.filter((m) => m !== 'auto')];
-      if (!opts.includes(current)) opts.push(current);
-      model.replaceChildren(...opts.map((m) => h('option', { value: m }, m === 'auto' ? t('settings.model.auto') : m)));
-      model.value = current;
-    };
-    fillModels();
-    model.addEventListener('change', () => save({ ai_model: model.value }));
-    const check = button({ label: t('settings.key.check'), iconName: 'key', kind: 'sm', onclick: async () => {
-      check.disabled = true;
-      keyStatus.className = 'key-status';
-      keyStatus.textContent = t('settings.key.checking');
-      try {
-        await updateSettings({ ai_api_key: key.value.trim() });
-        const res = await api.ai_test(key.value.trim());
-        if (res.ok) {
-          models = res.models || [];
-          fillModels();
-          keyStatus.className = 'key-status ok';
-          keyStatus.textContent = t('settings.key.ok', { model: res.model });
-        } else {
-          keyStatus.className = 'key-status err';
-          keyStatus.textContent = t('settings.key.fail', { error: res.error });
-        }
-      } catch (err) {
-        keyStatus.className = 'key-status err';
-        keyStatus.textContent = t('settings.key.fail', { error: err.message });
-      } finally {
-        check.disabled = false;
-      }
-    } });
+    renderAI();
 
     // 6. Data
     const openData = button({ label: t('settings.open'), iconName: 'external', kind: 'sm', onclick: () => api.open_data_folder().catch((e) => toast(e.message, 'error')) });
@@ -174,12 +284,7 @@ export function createSettings({ onThemeToggle }) {
           h('div', { class: 'set-desc' }, t('settings.cancel.desc'))), controls.cancel_words),
         h('div', { class: 'set-row col' }, h('div', { class: 'set-text' }, h('div', { class: 'set-title' }, t('settings.chain')),
           h('div', { class: 'set-desc' }, t('settings.chain.desc'))), controls.chain_words)),
-      card('05', 'settings.ai', 'spark',
-        row('settings.provider', 'settings.provider.desc', provider),
-        h('div', { class: 'set-row col' }, h('div', { class: 'set-text' }, h('div', { class: 'set-title' }, t('settings.key')),
-          h('div', { class: 'set-desc' }, t('settings.key.desc'))),
-        h('div', { class: 'input-row' }, key, eye, check), keyStatus),
-        row('settings.model', 'settings.model.desc', model)),
+      card('05', 'settings.ai', 'spark', aiBox),
       card('06', 'settings.data', 'data',
         row('settings.dataFolder', null, openData, h('div', { class: 'set-desc mono path' }, store.dataDir)),
         row('settings.reset', 'settings.reset.desc', reset)),
@@ -196,6 +301,7 @@ export function createSettings({ onThemeToggle }) {
     controls.stt?.set(s.stt_language);
     controls.autostart?.set(s.mic_autostart);
     if (controls.wake && document.activeElement !== controls.wake) controls.wake.value = s.wake_word;
+    if (ai && (PROVIDERS[s.ai_provider] ? s.ai_provider : 'openrouter') !== ai.provider) renderAI();
   }
 
   watch('settings', apply);

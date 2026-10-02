@@ -217,13 +217,29 @@ class Api:
         self._app.speaker.say(text, lang)
         return True
 
-    def ai_test(self, key: str | None = None) -> dict[str, Any]:
+    def ai_test(self, provider: str | None = None, key: str | None = None, url: str | None = None) -> dict[str, Any]:
+        """Check the AI provider with the values typed in the settings (a real request)."""
+        return self._app.ai_client.test(provider or None, key if key else None, url if url else None)
+
+    def ai_models(self, provider: str | None = None) -> list[str]:
+        """Models for the settings list (OpenRouter's free models are public, no key needed)."""
         from .ai import AIError
 
+        client = self._app.ai_client
         try:
-            return self._app.ai_client.test(key=key if key else None)
+            return client.list_models(client.conn(provider or None))
         except AIError as exc:
-            return {"ok": False, "error": str(exc)}
+            log.info("Cannot list AI models: %s", exc)
+            return []
+
+    def open_link(self, url: str) -> bool:
+        url = str(url or "")
+        if not url.lower().startswith(("https://", "http://")):
+            raise ValueError("Можно открывать только веб-ссылки")
+        from .apps import open_uri
+
+        open_uri(url)
+        return True
 
     def pick_file(self) -> str | None:
         window = getattr(self._app, "window", None)

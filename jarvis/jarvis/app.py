@@ -11,7 +11,7 @@ from typing import Any
 
 from . import APP_NAME, paths
 from .actions import Executor
-from .ai import AIAssistant, DeepSeekClient
+from .ai import AIAssistant, AIClient
 from .api import Api
 from .apps import AppResolver
 from .assistant import Assistant
@@ -54,8 +54,7 @@ class JarvisApp:
         self.store.ensure_seeded(self.settings.get("language"))
         self.history = History()
         self.resolver = AppResolver(self.store)
-        self.ai_client = DeepSeekClient(lambda: self.settings.get("ai_api_key"),
-                                        lambda: self.settings.get("ai_model"))
+        self.ai_client = AIClient(self.settings)
         self.ai = AIAssistant(self.ai_client, self.store)
         if voice:
             from .voice.tts import Speaker

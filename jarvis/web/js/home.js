@@ -2,6 +2,7 @@
 import { api } from './bridge.js';
 import { logo } from './icons.js';
 import { EXAMPLES, lang, t } from './i18n.js';
+import { aiName, aiReady } from './providers.js';
 import { store, updateSettings, watch } from './state.js';
 import { button, confirmDialog, h, ico, iconButton, segmented, slider, timeLabel, toast, toggle } from './ui.js';
 
@@ -240,9 +241,9 @@ export function createHome({ onThemeToggle, onOpenSettings }) {
     const s = store.settings;
     const sttKey = { auto: 'settings.stt.auto', ru: 'settings.stt.ru', en: 'settings.stt.en' }[s.stt_language] || 'settings.stt.auto';
     statusChips.replaceChildren(
-      h('button', { type: 'button', class: `chip-status ${s.ai_api_key ? 'ok' : ''}`, title: t('settings.ai'),
+      h('button', { type: 'button', class: `chip-status ${aiReady(s) ? 'ok' : ''}`, title: t('settings.ai'),
         onclick: () => onOpenSettings?.() }, h('span', { class: 'status-dot' }),
-      s.ai_api_key ? t('panel.ai.on') : t('panel.ai.off')),
+      aiReady(s) ? t('panel.ai.on', { name: aiName(s) }) : t('panel.ai.off')),
       h('span', { class: 'chip-status', title: t('settings.stt') }, ico('globe', 13), t(sttKey)));
   }
 

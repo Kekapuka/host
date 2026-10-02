@@ -402,7 +402,8 @@ APPS: list[dict[str, Any]] = [
     _pack("pack_typing", {"ru": "Ввод текста", "en": "Typing"}, "Aa",
           {"ru": "Напечатать, копировать, вставить", "en": "Type, copy, paste"}),
     _pack("pack_ai", {"ru": "ИИ-ассистент", "en": "AI assistant"}, "AI",
-          {"ru": "Вопросы к DeepSeek", "en": "Questions to DeepSeek"}),
+          {"ru": "Вопросы к ИИ: OpenRouter, Ollama, DeepSeek",
+           "en": "Questions to the AI: OpenRouter, Ollama, DeepSeek"}),
     _pack("pack_jarvis", {"ru": "Управление Джарвисом", "en": "Jarvis control"}, "J",
           {"ru": "Тихий режим, тема, микрофон", "en": "Silent mode, theme, microphone"}),
 ]

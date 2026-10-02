@@ -57,6 +57,11 @@ def wait_window(process_names, title_part="", timeout=15.0) -> int:
     return 0
 
 
+def print_windows(note: str) -> None:
+    """Visible windows, for diagnosing a failed check."""
+    print(note, [(w["exe"], w["title"]) for w in winapi.list_windows() if w["title"]][:40])
+
+
 def title_of(hwnd: int) -> str:
     for w in winapi.list_windows():
         if w["hwnd"] == hwnd:
@@ -95,10 +100,14 @@ def check_click_in_browser() -> None:
         "<h1>Музыка</h1><button onclick=\"document.title='CLICKED'\">Перемешать все</button>",
         encoding="utf-8")
     profile = tempfile.mkdtemp()
+    # an app window holds only this page: no welcome or "what's new" tab can cover it
     proc = subprocess.Popen([target.value, "--no-first-run", "--no-default-browser-check",
-                             f"--user-data-dir={profile}", page.as_uri()])
+                             "--disable-search-engine-choice-screen", f"--user-data-dir={profile}",
+                             f"--app={page.as_uri()}"])
     try:
-        hwnd = wait_window(target.process, "Jarvis UIA test", timeout=30)
+        hwnd = wait_window(target.process, "Jarvis UIA test", timeout=60)
+        if not hwnd:
+            print_windows("windows:")
         assert hwnd, "browser window with the test page did not appear"
         print("browser:", target.app_id, title_of(hwnd))
         winapi.focus_window(hwnd)
@@ -153,7 +162,7 @@ def check_command_chain() -> None:
         hwnd = wait_window(["chrome.exe"], "PLAYING", timeout=10)
         print("chain result window:", title_of(hwnd) if hwnd else None)
         if not hwnd:
-            print("chrome windows:", [w["title"] for w in winapi.list_windows() if w["exe"] == "chrome.exe"])
+            print_windows("windows:")
         assert hwnd, "the page button was not pressed"
         print("CHAIN OK")
     finally:
@@ -162,7 +171,7 @@ def check_command_chain() -> None:
 
 
 def main() -> int:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     check_typing()
     check_click_in_browser()
     check_command_chain()

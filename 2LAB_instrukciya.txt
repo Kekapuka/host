@@ -1,0 +1,618 @@
+================================================================
+ ЛАБОРАТОРНАЯ РАБОТА 2LAB — ПОЛНАЯ ИНСТРУКЦИЯ ПО НАСТРОЙКЕ
+ (VLAN, RSTP, агрегация PAgP, VTP, DTP, Telnet)
+================================================================
+
+Команды из этого файла можно копировать прямо в консоль.
+Вводить нужно только сами команды, заголовки и пояснения не вводятся.
+
+
+----------------------------------------------------------------
+ 0. РОЛИ КОММУТАТОРОВ И АДРЕСА
+----------------------------------------------------------------
+
+Роль по заданию          Коммутатор        VTP           DTP
+-----------------------  ----------------  ------------  ----------------
+CORE                     SW6, SW7, SW3     server        dynamic desirable
+L-SW                     SW2               transparent   dynamic auto
+R-SW                     SW4               transparent   dynamic auto
+L-SW-A                   SW1               client        dynamic desirable
+R-SW-A                   SW5               client        dynamic desirable
+
+Итог по DTP: CORE, L-SW-A и R-SW-A предлагают trunk (desirable),
+L-SW и R-SW его принимают (auto).
+
+Адресация:
+  VLAN 10  (192.168.10.0/24):  CLI1 = 192.168.10.1   CLI4 = 192.168.10.4
+  VLAN 20  (192.168.20.0/24):  CLI2 = 192.168.20.2   CLI5 = 192.168.20.5
+  VLAN 30  (192.168.30.0/24):  CLI3 = 192.168.30.3   CLI6 = 192.168.30.6
+  VLAN 100 (10.0.100.0/24):    AdminPC = 10.0.100.10
+                               SW1 = 10.0.100.1 ... SW7 = 10.0.100.7
+  VLAN 600: все неиспользуемые порты, выключены (shutdown)
+
+Соединения:
+  SW7 Gi0/0-0/1  <->  SW6 Gi0/1-0/2    Port-channel 1
+  SW7 Gi0/2-0/3  <->  SW3 Gi0/0-0/1    Port-channel 2
+  SW2 Gi0/0-0/1  <->  SW1 Gi0/0-0/1    Port-channel 3
+  SW4 Gi0/1-0/2  <->  SW5 Gi0/0-0/1    Port-channel 4
+  SW6 Gi0/0      <->  SW2 Gi0/2        одиночный trunk
+  SW3 Gi0/2      <->  SW4 Gi0/0        одиночный trunk
+  SW7 Gi1/0      ->   AdminPC          VLAN 100
+  SW1 Gi0/2 / Gi0/3 / Gi1/0  ->  CLI1 / CLI2 / CLI3
+  SW5 Gi0/2 / Gi0/3 / Gi1/0  ->  CLI4 / CLI5 / CLI6
+
+Пароли: пользователь Administrator / Admin123, VTP-пароль 123.
+Admin123 выбран произвольно, его можно заменить на свой.
+
+
+----------------------------------------------------------------
+ ПОРЯДОК РАБОТЫ
+----------------------------------------------------------------
+
+1) ЧАСТЬ А (база, VTP, RSTP, trunk-и, агрегация, VLAN) вводится
+   на коммутаторах строго в таком порядке:
+       SW7 -> SW6 -> SW3 -> SW2 -> SW4 -> SW1 -> SW5
+2) Подождать около 30 секунд и на каждом коммутаторе проверить:
+       show interfaces trunk
+       show vlan brief
+   VLAN 10, 20, 30, 100, 600 должны быть ВЕЗДЕ, а trunk-и подняты
+   с инкапсуляцией 802.1q.
+3) Только после этого ЧАСТЬ Б (порты клиентов, VLAN 600, Telnet)
+   на всех коммутаторах.
+4) Настройка компьютеров (раздел 9).
+5) Проверка (раздел 10).
+
+Почему именно так: если назначить порт в VLAN 600 на SW6/SW3 (server)
+раньше, чем VLAN придёт по VTP от SW7, коммутатор создаст VLAN сам,
+и VTP-база может перепутаться.
+
+Перед началом на каждом коммутаторе ввести:
+enable
+
+
+================================================================
+ 1. SW7 — CORE, VTP server, корень дерева
+================================================================
+
+--- ЧАСТЬ А ---
+conf t
+hostname SW7
+username Administrator privilege 15 secret Admin123
+spanning-tree mode rapid-pvst
+vtp domain TEST
+vtp password 123
+vtp version 2
+vtp mode server
+vlan 10
+vlan 20
+vlan 30
+vlan 100
+vlan 600
+exit
+interface range gi0/0 - 1
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+ channel-protocol pagp
+ channel-group 1 mode desirable
+ no shutdown
+interface range gi0/2 - 3
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+ channel-protocol pagp
+ channel-group 2 mode desirable
+ no shutdown
+interface port-channel 1
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+interface port-channel 2
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+exit
+spanning-tree vlan 1,10,20,30,100 root primary
+end
+write memory
+
+--- ЧАСТЬ Б ---
+conf t
+interface gi1/0
+ switchport mode access
+ switchport access vlan 100
+ no shutdown
+interface range gi1/1 - 3
+ switchport mode access
+ switchport access vlan 600
+ shutdown
+interface vlan 100
+ ip address 10.0.100.7 255.255.255.0
+ no shutdown
+exit
+access-list 10 permit host 10.0.100.10
+line vty 0 4
+ login local
+ transport input telnet
+ access-class 10 in
+end
+write memory
+
+
+================================================================
+ 2. SW6 — CORE, VTP server
+================================================================
+
+--- ЧАСТЬ А ---
+conf t
+hostname SW6
+username Administrator privilege 15 secret Admin123
+spanning-tree mode rapid-pvst
+vtp domain TEST
+vtp password 123
+vtp version 2
+vtp mode server
+interface range gi0/1 - 2
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+ channel-protocol pagp
+ channel-group 1 mode desirable
+ no shutdown
+interface port-channel 1
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+interface gi0/0
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+ no shutdown
+end
+write memory
+
+--- ЧАСТЬ Б ---
+conf t
+interface range gi0/3 , gi1/0 - 3
+ switchport mode access
+ switchport access vlan 600
+ shutdown
+interface vlan 100
+ ip address 10.0.100.6 255.255.255.0
+ no shutdown
+exit
+access-list 10 permit host 10.0.100.10
+line vty 0 4
+ login local
+ transport input telnet
+ access-class 10 in
+end
+write memory
+
+
+================================================================
+ 3. SW3 — CORE, VTP server
+================================================================
+
+--- ЧАСТЬ А ---
+conf t
+hostname SW3
+username Administrator privilege 15 secret Admin123
+spanning-tree mode rapid-pvst
+vtp domain TEST
+vtp password 123
+vtp version 2
+vtp mode server
+interface range gi0/0 - 1
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+ channel-protocol pagp
+ channel-group 2 mode desirable
+ no shutdown
+interface port-channel 2
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+interface gi0/2
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+ no shutdown
+end
+write memory
+
+--- ЧАСТЬ Б ---
+conf t
+interface range gi0/3 , gi1/0 - 3
+ switchport mode access
+ switchport access vlan 600
+ shutdown
+interface vlan 100
+ ip address 10.0.100.3 255.255.255.0
+ no shutdown
+exit
+access-list 10 permit host 10.0.100.10
+line vty 0 4
+ login local
+ transport input telnet
+ access-class 10 in
+end
+write memory
+
+
+================================================================
+ 4. SW2 — L-SW, VTP transparent (VLAN создаются вручную!)
+================================================================
+
+--- ЧАСТЬ А ---
+conf t
+hostname SW2
+username Administrator privilege 15 secret Admin123
+spanning-tree mode rapid-pvst
+vtp domain TEST
+vtp password 123
+vtp version 2
+vtp mode transparent
+vlan 10
+vlan 20
+vlan 30
+vlan 100
+vlan 600
+exit
+interface gi0/2
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic auto
+ no shutdown
+interface range gi0/0 - 1
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic auto
+ channel-protocol pagp
+ channel-group 3 mode auto
+ no shutdown
+interface port-channel 3
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic auto
+end
+write memory
+
+--- ЧАСТЬ Б ---
+conf t
+interface range gi0/3 , gi1/0 - 3
+ switchport mode access
+ switchport access vlan 600
+ shutdown
+interface vlan 100
+ ip address 10.0.100.2 255.255.255.0
+ no shutdown
+exit
+access-list 10 permit host 10.0.100.10
+line vty 0 4
+ login local
+ transport input telnet
+ access-class 10 in
+end
+write memory
+
+
+================================================================
+ 5. SW4 — R-SW, VTP transparent (VLAN создаются вручную!)
+================================================================
+
+--- ЧАСТЬ А ---
+conf t
+hostname SW4
+username Administrator privilege 15 secret Admin123
+spanning-tree mode rapid-pvst
+vtp domain TEST
+vtp password 123
+vtp version 2
+vtp mode transparent
+vlan 10
+vlan 20
+vlan 30
+vlan 100
+vlan 600
+exit
+interface gi0/0
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic auto
+ no shutdown
+interface range gi0/1 - 2
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic auto
+ channel-protocol pagp
+ channel-group 4 mode auto
+ no shutdown
+interface port-channel 4
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic auto
+end
+write memory
+
+--- ЧАСТЬ Б ---
+conf t
+interface range gi0/3 , gi1/0 - 3
+ switchport mode access
+ switchport access vlan 600
+ shutdown
+interface vlan 100
+ ip address 10.0.100.4 255.255.255.0
+ no shutdown
+exit
+access-list 10 permit host 10.0.100.10
+line vty 0 4
+ login local
+ transport input telnet
+ access-class 10 in
+end
+write memory
+
+
+================================================================
+ 6. SW1 — L-SW-A, VTP client
+================================================================
+
+--- ЧАСТЬ А ---
+Важно: vtp version 2 вводится ДО vtp mode client, потому что
+в режиме client версию поменять нельзя.
+
+conf t
+hostname SW1
+username Administrator privilege 15 secret Admin123
+spanning-tree mode rapid-pvst
+vtp domain TEST
+vtp password 123
+vtp version 2
+vtp mode client
+interface range gi0/0 - 1
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+ channel-protocol pagp
+ channel-group 3 mode desirable
+ no shutdown
+interface port-channel 3
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+end
+write memory
+
+--- ЧАСТЬ Б ---
+conf t
+interface gi0/2
+ switchport mode access
+ switchport access vlan 10
+ no shutdown
+interface gi0/3
+ switchport mode access
+ switchport access vlan 20
+ no shutdown
+interface gi1/0
+ switchport mode access
+ switchport access vlan 30
+ no shutdown
+interface range gi1/1 - 3
+ switchport mode access
+ switchport access vlan 600
+ shutdown
+interface vlan 100
+ ip address 10.0.100.1 255.255.255.0
+ no shutdown
+exit
+access-list 10 permit host 10.0.100.10
+line vty 0 4
+ login local
+ transport input telnet
+ access-class 10 in
+end
+write memory
+
+
+================================================================
+ 7. SW5 — R-SW-A, VTP client
+================================================================
+
+--- ЧАСТЬ А ---
+conf t
+hostname SW5
+username Administrator privilege 15 secret Admin123
+spanning-tree mode rapid-pvst
+vtp domain TEST
+vtp password 123
+vtp version 2
+vtp mode client
+interface range gi0/0 - 1
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+ channel-protocol pagp
+ channel-group 4 mode desirable
+ no shutdown
+interface port-channel 4
+ switchport trunk encapsulation dot1q
+ switchport mode dynamic desirable
+end
+write memory
+
+--- ЧАСТЬ Б ---
+conf t
+interface gi0/2
+ switchport mode access
+ switchport access vlan 10
+ no shutdown
+interface gi0/3
+ switchport mode access
+ switchport access vlan 20
+ no shutdown
+interface gi1/0
+ switchport mode access
+ switchport access vlan 30
+ no shutdown
+interface range gi1/1 - 3
+ switchport mode access
+ switchport access vlan 600
+ shutdown
+interface vlan 100
+ ip address 10.0.100.5 255.255.255.0
+ no shutdown
+exit
+access-list 10 permit host 10.0.100.10
+line vty 0 4
+ login local
+ transport input telnet
+ access-class 10 in
+end
+write memory
+
+
+----------------------------------------------------------------
+ 8. ЧТО ДЕЛАЕТ КАЖДАЯ ЧАСТЬ (кратко)
+----------------------------------------------------------------
+
+username Administrator ...      пользователь Administrator (задание п.1)
+spanning-tree mode rapid-pvst   RSTP, устранение петель (п.3)
+... root primary (на SW7)       SW7 становится корнем дерева
+vtp domain/password/version/mode  VTP (п.6)
+switchport trunk encapsulation dot1q
+                                trunk по стандарту 802.1Q. БЕЗ этой строки
+                                коммутаторы договариваются об ISL (n-isl),
+                                и в EVE-NG трафик клиентов не проходит
+switchport mode dynamic desirable/auto
+                                DTP (п.7): desirable предлагает trunk,
+                                auto принимает
+channel-protocol pagp + channel-group N mode desirable/auto
+                                агрегация двойных линков (п.4)
+switchport access vlan 10/20/30/100   клиенты по VLAN (п.2)
+switchport access vlan 600 + shutdown свободные порты (п.2, VLAN600)
+interface vlan 100 + ip address       адрес коммутатора для Telnet (п.5)
+access-list 10 permit host 10.0.100.10
+                                разрешён только AdminPC
+line vty 0 4                    линии удалённого доступа:
+  login local                   вход по логину Administrator
+  transport input telnet        разрешён Telnet
+  access-class 10 in            пускать только адреса из ACL 10
+write memory                    сохранить, иначе после перезагрузки
+                                конфигурация пропадёт
+
+
+----------------------------------------------------------------
+ 9. НАСТРОЙКА КОМПЬЮТЕРОВ (Linux, Debian)
+----------------------------------------------------------------
+
+На каждой машине открыть файл:
+nano /etc/network/interfaces
+
+Блок интерфейса ens3 привести к виду (ОБЯЗАТЕЛЬНО inet static,
+а не inet dhcp):
+
+auto ens3
+iface ens3 inet static
+        address 192.168.10.1/24
+
+Адрес в строке address для каждой машины свой:
+  CLI1     192.168.10.1/24
+  CLI2     192.168.20.2/24
+  CLI3     192.168.30.3/24
+  CLI4     192.168.10.4/24
+  CLI5     192.168.20.5/24
+  CLI6     192.168.30.6/24
+  AdminPC  10.0.100.10/24
+
+Сохранить: Ctrl+O, Enter, Ctrl+X.
+Применить:
+ip addr flush dev ens3
+systemctl restart networking
+Проверить:
+ip a
+(если не применилось, сделать reboot)
+
+Если интерфейс называется не ens3, посмотреть имя через ip a
+и подставить его в обе строки.
+
+
+----------------------------------------------------------------
+ 10. ПРОВЕРКА
+----------------------------------------------------------------
+
+На коммутаторах:
+show interfaces trunk       trunk-и в состоянии trunking,
+                            Encapsulation = 802.1q (не isl!),
+                            Mode = desirable / auto по таблице ролей
+show etherchannel summary   Port-channel с флагом SU, порты с флагом P
+show vlan brief             VLAN 10,20,30,100,600 и порты в них
+show vtp status             домен TEST, режим server/transparent/client
+show spanning-tree          на SW7 "This bridge is the root"
+show ip interface brief     Vlan100 в состоянии up/up
+
+С компьютеров:
+CLI1 -> ping 192.168.10.4   (CLI4) должен проходить
+CLI2 -> ping 192.168.20.5   (CLI5) должен проходить
+CLI3 -> ping 192.168.30.6   (CLI6) должен проходить
+Пинг между разными VLAN проходить НЕ должен, это правильно,
+потому что маршрутизации в задании нет.
+
+С AdminPC:
+telnet 10.0.100.1     (SW1; для SWx адрес 10.0.100.x)
+Username: Administrator
+Password: Admin123
+Если поменять адрес AdminPC (например на 10.0.100.20), Telnet
+отклоняется: значит фильтр работает.
+
+Демонстрация VTP:
+на SW7:  conf t  ->  vlan 50  ->  end
+VLAN 50 появится на SW6, SW3, SW1, SW5 (server/client)
+и НЕ появится на SW2, SW4 (transparent).
+После показа удалить:  conf t  ->  no vlan 50  ->  end
+
+
+----------------------------------------------------------------
+ 11. ЕСЛИ НЕ РАБОТАЕТ
+----------------------------------------------------------------
+
+Пинг "Destination Host Unreachable":
+ - на компьютере стоит inet dhcp вместо inet static;
+ - второй компьютер выключен в EVE-NG или у него неверный адрес;
+ - в show interfaces trunk стоит n-isl: добавить
+   switchport trunk encapsulation dot1q на все trunk-порты
+   и Port-channel (так и было исправлено в этой инструкции).
+
+Найти место обрыва: запустить ping с CLI1 и на каждом коммутаторе
+по цепочке SW1 -> SW2 -> SW6 -> SW7 -> SW3 -> SW4 -> SW5 смотреть
+show mac address-table vlan 10
+Первый коммутатор, где нет MAC-адреса CLI1, и есть место обрыва.
+
+Trunk не поднимается: на обеих сторонах линка стоит dynamic auto,
+или у коммутаторов разный VTP-домен.
+
+Port-channel в состоянии SD или порты с флагом I/s: настройки
+портов в группе различаются. На обоих коммутаторах:
+conf t
+default interface range gi0/0 - 1
+(подставить порты этой группы) и ввести команды заново.
+
+VLAN не приходят на client: проверить домен TEST, пароль 123
+(show vtp status) и что trunk до SW7 поднят.
+На SW2 и SW4 VLAN по VTP не приходят никогда: они transparent,
+там VLAN создаются вручную.
+
+Сообщение "Duplicate address ... on Vlan1": у коммутаторов
+из шаблона одинаковый адрес на VLAN 1. На работу не влияет,
+убрать можно так (на каждом коммутаторе):
+conf t
+interface vlan 1
+ no ip address
+ shutdown
+end
+write memory
+
+
+----------------------------------------------------------------
+ 12. КОНТРОЛЬНЫЕ ВОПРОСЫ (кратко)
+----------------------------------------------------------------
+
+1. Для чего нужен VLAN?
+   Чтобы на одном физическом оборудовании разделить сеть на
+   изолированные логические сети: устройства разных VLAN не видят
+   друг друга, каждый VLAN — отдельный широковещательный домен.
+   Это уменьшает широковещательный трафик, повышает безопасность
+   и упрощает управление.
+
+2. Чем полезен DTP в больших предприятиях?
+   Trunk между коммутаторами Cisco поднимается автоматически
+   (desirable/auto), не нужно вручную настраивать каждую сторону
+   каждого линка. Это экономит время при большом количестве
+   коммутаторов.
+
+3. Для чего используется протокол VTP?
+   Для централизованного управления VLAN: VLAN создаются, удаляются
+   и переименовываются на сервере, и изменения автоматически
+   расходятся на все коммутаторы-клиенты домена.
